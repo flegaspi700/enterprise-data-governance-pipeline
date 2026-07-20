@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 from pypdf import PdfReader
 
 # =====================================================================
@@ -9,31 +10,48 @@ SOURCE_DIR = "source_documents"
 SANITIZED_DIR = "sanitized_output"
 REVIEW_DIR = "human_review_queue"
 
-# Ensure output directories exist locally
+# Risk Threshold: If a file has more than this many total PII leaks, route to review queue
+HIGH_RISK_THRESHOLD = 2
+
+# Ensure all local output directories exist
 os.makedirs(SANITIZED_DIR, exist_ok=True)
 os.makedirs(REVIEW_DIR, exist_ok=True)
 
 # =====================================================================
-# SPRINT 2: GOVERNANCE & MASKING REGEX PATTERNS (FREE/LOCAL)
+# EXPANDED GOVERNANCE LAYER (FREE/LOCAL)
 # =====================================================================
-# High-performance compiled regex patterns for zero-cost PII detection
+# High-performance compiled regex patterns for expanded PII detection
 EMAIL_REGEX = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+PHONE_REGEX = re.compile(r'\b(?:\+?1[-. ]?)?\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})\b')
+SSN_REGEX = re.compile(r'\b\d{3}-\d{2}-\d{4}\b')
 
 def mask_sensitive_data(text):
     """
-    Governance Layer: Scans text for PII patterns and redacts them.
-    Tracks compliance metrics via local substitution counters.
+    Advanced Governance Layer: Scans text for multiple PII types, 
+    redacts them locally, and computes total compliance risk metrics.
     """
     sanitized_text = text
     
-    # Count how many emails we find for logging purposes
-    email_matches = EMAIL_REGEX.findall(sanitized_text)
-    redaction_count = len(email_matches)
+    # Track metrics for audit logging
+    emails_found = len(EMAIL_REGEX.findall(sanitized_text))
+    phones_found = len(PHONE_REGEX.findall(sanitized_text))
+    ssns_found = len(SSN_REGEX.findall(sanitized_text))
     
-    # Perform the local redaction
+    total_pii_count = emails_found + phones_found + ssns_found
+    
+    # Execute local, zero-cost redactions
     sanitized_text = EMAIL_REGEX.sub("[REDACTED_EMAIL]", sanitized_text)
+    sanitized_text = PHONE_REGEX.sub("[REDACTED_PHONE]", sanitized_text)
+    sanitized_text = SSN_REGEX.sub("[REDACTED_TAX_ID]", sanitized_text)
     
-    return sanitized_text, redaction_count
+    metrics = {
+        "emails": emails_found,
+        "phones": phones_found,
+        "ssns": ssns_found,
+        "total": total_pii_count
+    }
+    
+    return sanitized_text, metrics
 
 def extract_text_from_pdf(pdf_path):
     """Core Ingestion Engine: Reads a local PDF file and extracts raw text."""
@@ -50,9 +68,9 @@ def extract_text_from_pdf(pdf_path):
         return None
 
 def run_ingestion_pipeline():
-    """Orchestrates Sprint 1 & 2: Ingests, redacts, and saves sanitized output."""
+    """Orchestrates Ingestion, Multi-Pattern Redaction, and Human-in-the-Loop Routing."""
     print("=" * 60)
-    print("STARTING RUN: Enterprise Data Governance Pipeline (Phase 1 & 2)")
+    print("STARTING RUN: Multi-Layer Governance & Human-in-the-Loop Triage")
     print("=" * 60)
     
     if not os.path.exists(SOURCE_DIR):
@@ -73,23 +91,29 @@ def run_ingestion_pipeline():
         
         # 1. Ingestion Phase
         raw_text = extract_text_from_pdf(file_path)
-        
         if not raw_text:
             print(f"    [FAILED] Skipping file due to extraction errors.")
             continue
             
         print(f"    [SUCCESS] Ingested {len(raw_text)} characters.")
         
-        # 2. Governance & Masking Phase
-        print(f"    [GOVERNANCE] Scanning text for sensitive PII data...")
-        sanitized_text, emails_found = mask_sensitive_data(raw_text)
+        # 2. Advanced Governance & Metrics Phase
+        sanitized_text, metrics = mask_sensitive_data(raw_text)
+        print(f"    [GOVERNANCE] Scan metrics: Emails: {metrics['emails']} | Phones: {metrics['phones']} | SSNs: {metrics['ssns']}")
         
-        if emails_found > 0:
-            print(f"    [WARNING] Detected and masked {emails_found} instance(s) of Email PII.")
+        # 3. Human-in-the-Loop Routing Layer (Triage Logic)
+        if metrics['total'] > HIGH_RISK_THRESHOLD:
+            print(f"    [RISK WARNING] Total PII violations ({metrics['total']}) exceed safety threshold ({HIGH_RISK_THRESHOLD}).")
+            review_dest = os.path.join(REVIEW_DIR, file_name)
+            try:
+                shutil.copy2(file_path, review_dest)
+                print(f"    [ROUTED] High-risk original file copied to queue: {review_dest}")
+            except Exception as e:
+                print(f"    [ERROR] Failed to route file to review queue. Context: {e}")
         else:
-            print(f"    [CLEAN] No obvious Email PII patterns detected.")
+            print(f"    [PASS] Low-risk file. Cleaned stream routing to standard output.")
             
-        # 3. Output/Storage Phase
+        # 4. Storage Phase
         output_file_name = file_name.replace(".pdf", "_sanitized.txt")
         output_path = os.path.join(SANITIZED_DIR, output_file_name)
         
