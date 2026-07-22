@@ -4,6 +4,10 @@ import shutil
 import json
 import hashlib
 import datetime
+import io
+import fitz  # PyMuPDF
+import pytesseract
+from PIL import Image
 from pypdf import PdfReader
 
 # =====================================================================
@@ -79,6 +83,11 @@ def load_config():
 
 # Load configuration dynamically
 load_config()
+
+# Configure pytesseract path if present in CONFIG
+TESSERACT_CMD = CONFIG.get("tesseract_cmd")
+if TESSERACT_CMD:
+    pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
 
 # Assign module-level constants for backward compatibility
 SOURCE_DIR = CONFIG["directories"]["source"]
@@ -219,6 +228,27 @@ def extract_text_from_pdf(pdf_path):
         print(f"[ERROR] Failed to read PDF file at {pdf_path}. Context: {e}")
         return None
 
+def extract_text_via_ocr(pdf_path):
+    """Fallback Ingestion Engine: Renders PDF pages to images and runs Tesseract OCR."""
+    print(f"    [OCR] Triggering OCR fallback stream for: {pdf_path}")
+    try:
+        doc = fitz.open(pdf_path)
+        extracted_text = ""
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            pix = page.get_pixmap(dpi=150)
+            img_data = pix.tobytes("png")
+            img = Image.open(io.BytesIO(img_data))
+            
+            page_text = pytesseract.image_to_string(img)
+            if page_text:
+                extracted_text += page_text + "\n"
+        
+        return extracted_text.strip()
+    except Exception as e:
+        print(f"[ERROR] OCR fallback extraction failed. Context: {e}")
+        return None
+
 def run_ingestion_pipeline():
     """Orchestrates Ingestion, Multi-Pattern Redaction, and Human-in-the-Loop Routing."""
     print("=" * 60)
@@ -266,7 +296,12 @@ def run_ingestion_pipeline():
             continue
             
         if raw_text == "":
-            print(f"    [RISK WARNING] File contains 0 characters of text (potential scanned/image PDF). Routing to review queue.")
+            print(f"    [RISK WARNING] File contains 0 characters of text. Invoking OCR fallback...")
+            raw_text = extract_text_via_ocr(file_path)
+            
+        if raw_text is None or raw_text == "":
+            reason = "OCR failed to extract text" if raw_text == "" else "OCR extraction errors"
+            print(f"    [RISK WARNING] File contains 0 characters after OCR ({reason}). Routing to review queue.")
             is_high_risk = True
             review_dest = os.path.join(REVIEW_DIR, file_name)
             try:
@@ -281,7 +316,7 @@ def run_ingestion_pipeline():
                     "status": "UNREADABLE_IMAGE_PDF",
                     "risk_metrics": {
                         "total": "N/A",
-                        "reason": "PDF contains no extractable text characters"
+                        "reason": f"PDF contains no extractable text (OCR returned empty text: {reason})"
                     }
                 }
                 json_name = file_name.replace(".pdf", "_review.json")
@@ -296,7 +331,7 @@ def run_ingestion_pipeline():
             manifest[file_hash] = {
                 "file_name": file_name,
                 "processed_at": datetime.datetime.now().isoformat(),
-                "pii_metrics": {"total": "N/A", "reason": "UNREADABLE_IMAGE_PDF"},
+                "pii_metrics": {"total": "N/A", "reason": "UNREADABLE_IMAGE_PDF_OCR_FAILED"},
                 "routed_to_review": True
             }
             manifest_updated = True

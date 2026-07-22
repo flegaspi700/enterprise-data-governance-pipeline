@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Data Governance Pipeline - Local Data & State
+source_documents/*
+!source_documents/.gitkeep
+sanitized_output/*
+!sanitized_output/.gitkeep
+human_review_queue/*
+!human_review_queue/.gitkeep
+archived_sources/*
+!archived_sources/.gitkeep
+ingestion_manifest.json
+config.json

@@ -73,14 +73,21 @@ pip install pypdf
 ```
 
 ### 3. Pipeline Ingestion & Triage Verification
-Drop an unstructured PDF document containing mock sensitive details into the `source_documents/` folder.
+You can run the pipeline in two modes:
 
-Run the main processing execution daemon:
-
+#### Option A: Manual Batch Ingestion
+Drop an unstructured PDF document containing mock sensitive details into the `source_documents/` folder, then run the batch ingestion process:
 ```bash
 python pipeline.py
 ```
 
-Audit your local execution outputs:
-- **Clean Data:** View the sanitized files inside `sanitized_output/`.
-- **Escalated Audit Files:** Check `human_review_queue/` for isolated files that tripped the risk safety threshold.
+#### Option B: Real-Time Ingestion (File-Watching Daemon)
+To start the file-watching daemon which automatically processes PDFs as they arrive in `source_documents/`:
+```bash
+python watcher.py
+```
+
+### 4. Audit local execution outputs
+- **Clean Data**: View the sanitized files inside `sanitized_output/`.
+- **Escalated Audit Files**: Check `human_review_queue/` for isolated files that tripped the risk safety threshold.
+- **Verification & Testing**: See [TESTING.md](file:///d:/Learn/ag_enterprise_data_governance_pipeline/enterprise-data-governance-pipeline/TESTING.md) for detailed test scenarios and helper scripts to generate mock/scanned PDFs.

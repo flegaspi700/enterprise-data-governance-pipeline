@@ -1,53 +1,68 @@
-# Future Improvements & Roadmap: Data Ingestion Governance Pipeline
+# Roadmap & Improvements Tracker: Data Ingestion Governance Pipeline
 
-This document captures architectural and functional recommendations to transition the local governance pipeline from a prototype to an enterprise-ready production system.
-
----
-
-## 1. Externalized Rule Configuration (`config.json` / `config.yaml`)
-* **Objective**: Separate governance policy settings from the core python execution logic.
-* **Details**:
-  * Create a `config.yaml` to specify folder structures, `HIGH_RISK_THRESHOLD`, and lists of regex pattern rules.
-  * Enable/disable specific PII classes dynamically.
-* **Value**: Allows security teams to adjust compliance rules (e.g., adding credit card numbers or local tax identifiers) without touching the deployment codebase.
+This document tracks the architectural enhancements, security compliance steps, and feature additions for the enterprise data governance pipeline.
 
 ---
 
-## 2. OCR Fallback for Scanned Documents
-* **Objective**: Guard against empty text extractions in image-only or scanned PDFs.
-* **Details**:
-  * Add checks to detect zero-character text extractions.
-  * Integrate an open-source OCR tool (like `pytesseract` or `ocrmypdf`) as a fallback stream.
-  * Route files that fail OCR directly to the `human_review_queue/`.
-* **Value**: Closes a security loophole where raw text is empty but the image contains highly sensitive information.
+## 📊 Feature Status Tracker
+
+| Feature / Improvement | Target Phase | Status | Completed Date | Description |
+| :--- | :---: | :---: | :---: | :--- |
+| **Externalized Config (`config.json`)** | Phase 1 | **Completed** | 2026-07-22 | Moved folder settings and regex rule patterns to external config. |
+| **spaCy ML NER Integration** | Phase 1 | **Completed** | 2026-07-22 | Local Named Entity Recognition using spaCy's `en_core_web_sm` pipeline. |
+| **Dependency Standardization** | Phase 1 | **Completed** | 2026-07-22 | Pin project dependencies in `requirements.txt`. |
+| **OCR Fallback (Scanned PDFs)** | Phase 2 | **Completed** | 2026-07-22 | OCR stream extraction using Tesseract or similar for non-readable PDFs. |
+| **Background Watchdog Daemon** | Phase 3 | **Completed** | 2026-07-22 | Continuous local ingestion via watchdog daemon on `source_documents/`. |
+| **Streamlit Triage Dashboard** | Phase 4 | *Pending* | - | Streamlit web panel to approve or reject flagged high-risk entities. |
+| **Automated Testing Suite** | Phase 5 | *Pending* | - | Unit and integration testing for pipeline components. |
 
 ---
 
-## 3. Machine Learning Named Entity Recognition (NER)
-* **Objective**: Introduce context-aware entity masking alongside strict pattern-based matching.
+## 🛠️ Detailed Roadmap & Implementation Status
+
+### 1. Externalized Rule Configuration (`config.json`)
+* **Objective**: Separate governance policy settings from core logic.
+* **Status**: **Completed** ✅
+* **Details**: 
+  - Implemented dynamic loading from [config.json](file:///d:/Learn/ag_enterprise_data_governance_pipeline/enterprise-data-governance-pipeline/config.json).
+  - Configurable regex compliance rules, high risk counts, and engine states.
+  - Graceful default config fallback behavior when file is missing or corrupt.
+
+### 2. spaCy Machine Learning NER Integration
+* **Objective**: Context-aware entity masking to supplement pattern regex.
+* **Status**: **Completed** ✅
+* **Details**: 
+  - Integrated `spaCy` NLP core with the optimized `en_core_web_sm` model.
+  - Enabled detection of names (`PERSON`), organizations (`ORG`), and locations (`GPE`).
+  - Added token substitutions without character offset drift during sequence modification.
+
+### 3. Dependency Standardization
+* **Objective**: Pin versions and outline setup procedures.
+* **Status**: **Completed** ✅
+* **Details**: 
+  - Created [requirements.txt](file:///d:/Learn/ag_enterprise_data_governance_pipeline/enterprise-data-governance-pipeline/requirements.txt) pinning `pypdf==6.14.2` and `spacy==3.8.14`.
+  - Documented setup instructions to download required language assets.
+
+### 4. OCR Fallback for Scanned Documents
+* **Objective**: Guard against empty text extraction from scanned/image-only PDFs.
+* **Status**: **Completed** ✅
 * **Details**:
-  * Implement `spaCy` NLP core with the optimized `en_core_web_sm` pipeline.
-  * Detect dynamic, context-specific tokens: `PERSON` (names), `ORG` (companies), `GPE` (locations), and custom entity mappings.
-  * Assign confidence score matrices to entities to guide threshold decisions.
-* **Value**: Protects sensitive unstructured text fields (such as narrative fields in contracts or letters) that regex patterns cannot cover.
+  - Add text-length evaluation checks (character count == 0).
+  - Implement OCR engine integration using PyMuPDF and `pytesseract` configured via `config.json`.
+  - Route OCR failures or files with empty OCR output to the human review queue.
 
----
-
-## 4. Background Ingestion Daemon (File-Watching)
-* **Objective**: Change from batch-oriented manual execution to a continuous background process.
+### 5. Background Ingestion Daemon (File-Watching)
+* **Objective**: Continuous execution pattern instead of batch-oriented manual execution.
+* **Status**: **Completed** ✅
 * **Details**:
-  * Implement Python's `watchdog` library to monitor `source_documents/`.
-  * Trigger processing events dynamically as soon as a new file lands.
-  * Write execution status to a centralized local log file.
-* **Value**: Operates similarly to standard cloud ingestion buckets (e.g., AWS S3 event triggers or Azure Blob triggers) inside the local infrastructure.
+  - Integrate `watchdog` to monitor the file system directory [source_documents](file:///d:/Learn/ag_enterprise_data_governance_pipeline/enterprise-data-governance-pipeline/source_documents) in real-time.
+  - Auto-trigger ingestion sequence on file creation and move events.
+  - Added safety debounce and delay mechanisms in `watcher.py` to prevent processing partial writes.
 
----
-
-## 5. Streamlit Administrative Triage Dashboard
-* **Objective**: Provide a simple visual interface for the "Human-in-the-Loop" review step.
+### 6. Streamlit Administrative Triage Dashboard
+* **Objective**: Lightweight "Human-in-the-Loop" administrative approval/rejection panel.
+* **Status**: *Pending* ⏳
 * **Details**:
-  * Build a lightweight, local Streamlit dashboard.
-  * Parse files inside `human_review_queue/` and render their corresponding `_review.json` files.
-  * Display a diff viewer showing highlighted PII tags.
-  * Provide "Approve" (move to sanitized output pool) and "Reject" (delete or isolate) actions.
-* **Value**: Democratizes the auditing process, allowing compliance officers to easily manage and clear the triage queue.
+  - Parse metadata from [human_review_queue](file:///d:/Learn/ag_enterprise_data_governance_pipeline/enterprise-data-governance-pipeline/human_review_queue).
+  - Build simple comparison diff showing before/after text masking.
+  - Implement Approve (archive & save sanitized) and Reject actions.

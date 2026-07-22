@@ -1,0 +1,32 @@
+{
+    "tesseract_cmd": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+    "directories": {
+        "source": "source_documents",
+        "sanitized": "sanitized_output",
+        "review": "human_review_queue",
+        "archive": "archived_sources"
+    },
+    "manifest_file": "ingestion_manifest.json",
+    "high_risk_threshold": 2,
+    "enable_spacy_ner": true,
+    "pii_rules": [
+        {
+            "name": "emails",
+            "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+            "redaction_token": "[REDACTED_EMAIL]",
+            "enabled": true
+        },
+        {
+            "name": "phones",
+            "regex": "\\b(?:\\+?1[-. ]?)?\\(?([0-9]{3})\\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})\\b",
+            "redaction_token": "[REDACTED_PHONE]",
+            "enabled": true
+        },
+        {
+            "name": "ssns",
+            "regex": "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+            "redaction_token": "[REDACTED_TAX_ID]",
+            "enabled": true
+        }
+    ]
+}
