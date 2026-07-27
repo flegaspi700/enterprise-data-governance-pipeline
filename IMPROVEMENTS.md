@@ -13,12 +13,14 @@ This document tracks the architectural enhancements, security compliance steps, 
 | **Dependency Standardization** | Phase 1 | **Completed** | 2026-07-22 | Pin project dependencies in `requirements.txt`. |
 | **OCR Fallback (Scanned PDFs)** | Phase 2 | **Completed** | 2026-07-22 | OCR stream extraction using Tesseract or similar for non-readable PDFs. |
 | **Background Watchdog Daemon** | Phase 3 | **Completed** | 2026-07-22 | Continuous local ingestion via watchdog daemon on `source_documents/`. |
-| **Streamlit Triage Dashboard** | Phase 4 | *Pending* | - | Streamlit web panel to approve or reject flagged high-risk entities. |
+| **Streamlit Triage Dashboard** | Phase 4 | **Completed** | 2026-07-27 | Streamlit web panel to review flagged high-risk entities, compare before/after masking, and approve or reject items. |
 | **Automated Testing Suite** | Phase 5 | *Pending* | - | Unit and integration testing for pipeline components. |
 
 ---
 
 ## 🛠️ Detailed Roadmap & Implementation Status
+
+## Phase 1 — Foundation and Core Governance
 
 ### 1. Externalized Rule Configuration (`config.json`)
 * **Objective**: Separate governance policy settings from core logic.
@@ -61,8 +63,36 @@ This document tracks the architectural enhancements, security compliance steps, 
 
 ### 6. Streamlit Administrative Triage Dashboard
 * **Objective**: Lightweight "Human-in-the-Loop" administrative approval/rejection panel.
+* **Status**: **Completed** ✅
+* **Details**:
+  - Parsed metadata from [human_review_queue](file:///d:/Learn/ag_enterprise_data_governance_pipeline/enterprise-data-governance-pipeline/human_review_queue).
+  - Built a Streamlit review experience with before/after masking diff rendering.
+  - Implemented Approve and Reject actions that move reviewed items into approved/rejected queues and update the ingestion manifest.
+
+---
+
+## Phase 2 — Polished UI and Operational Review Experience
+
+### 7. UI/UX overhaul
+* **Objective**: Transform the current review screen into a more polished, operationally friendly interface.
 * **Status**: *Pending* ⏳
 * **Details**:
-  - Parse metadata from [human_review_queue](file:///d:/Learn/ag_enterprise_data_governance_pipeline/enterprise-data-governance-pipeline/human_review_queue).
-  - Build simple comparison diff showing before/after text masking.
-  - Implement Approve (archive & save sanitized) and Reject actions.
+  - Improve the layout with a clearer pending-items queue and main detail pane.
+  - Add stronger visual hierarchy for document metadata, risk information, and review actions.
+  - Refine the before/after diff view for better readability and usability.
+
+### 8. Advanced review workflow
+* **Objective**: Make the review experience faster, more scalable, and better suited for team use.
+* **Status**: *Pending* ⏳
+* **Details**:
+  - Add filtering by status, risk level, and date to manage large review queues.
+  - Support bulk approve/reject actions for efficiency.
+  - Capture reviewer comments and preserve a richer audit trail for each decision.
+
+### 9. Analytics and reporting
+* **Objective**: Provide operational visibility into review outcomes and governance performance.
+* **Status**: *Pending* ⏳
+* **Details**:
+  - Display counts of pending, approved, and rejected items in the dashboard.
+  - Add charts or summaries for review volume and risk trends.
+  - Export review decisions and aggregate metrics for governance reporting.
