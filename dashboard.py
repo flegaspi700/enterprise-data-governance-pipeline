@@ -111,6 +111,48 @@ def append_review_log(entry):
         st.warning(f"Could not write review log: {e}")
 
 
+def get_status_badge(status):
+    mapping = {
+        "UNREADABLE_IMAGE_PDF": "⚠️",
+        "APPROVED": "✅",
+        "REJECTED": "❌",
+    }
+    return mapping.get(status, "●")
+
+
+def get_status_label(status):
+    mapping = {
+        "UNREADABLE_IMAGE_PDF": "Unreadable image PDF",
+        "PENDING_REVIEW": "Pending review",
+        "APPROVED": "Approved",
+        "REJECTED": "Rejected",
+    }
+    return mapping.get(status, (status or "UNKNOWN").replace("_", " ").title())
+
+
+def get_risk_score(meta):
+    risk_metrics = meta.get("risk_metrics", {}) or {}
+    if not isinstance(risk_metrics, dict):
+        return None
+
+    for key in ("PII hits", "PII Hits", "pii_hits", "PII_HITS", "risk_score"):
+        value = risk_metrics.get(key)
+        if isinstance(value, (int, float)):
+            return int(value)
+    return None
+
+
+def build_queue_summary(pending):
+    total = len(pending)
+    high_risk = sum(1 for meta in pending if (get_risk_score(meta) or 0) >= pl.HIGH_RISK_THRESHOLD)
+    unreadable = sum(1 for meta in pending if meta.get("status") == "UNREADABLE_IMAGE_PDF")
+    return {
+        "total": total,
+        "high_risk": high_risk,
+        "unreadable": unreadable,
+    }
+
+
 def update_manifest_decision(file_hash, decision, reason=""):
     if not file_hash:
         return
@@ -266,122 +308,149 @@ def reject_item(meta, reason=""):
 # ---------------------------------------------------------------------------
 # Streamlit UI
 # ---------------------------------------------------------------------------
-st.set_page_config(page_title="Governance Triage Dashboard", layout="wide")
-st.title("🛡️ Human Review Triage Dashboard")
-st.caption(
-    f"Queue: `{pl.REVIEW_DIR}`  •  Sanitized output: `{pl.SANITIZED_DIR}`  •  "
-    f"High-risk threshold: {pl.HIGH_RISK_THRESHOLD} PII hits"
-)
 
-if "selected_json" not in st.session_state:
-    st.session_state.selected_json = None
+def main():
+    st.set_page_config(page_title="Governance Triage Dashboard", layout="wide")
+    st.title("🛡️ Human Review Triage Dashboard")
+    st.caption(
+        f"Queue: `{pl.REVIEW_DIR}`  •  Sanitized output: `{pl.SANITIZED_DIR}`  •  "
+        f"High-risk threshold: {pl.HIGH_RISK_THRESHOLD} PII hits"
+    )
 
-pending = list_pending_reviews()
+    if "selected_json" not in st.session_state:
+        st.session_state.selected_json = None
 
-with st.sidebar:
-    st.header(f"Pending Review ({len(pending)})")
+    pending = list_pending_reviews()
+    summary = build_queue_summary(pending)
+
+    with st.sidebar:
+        st.header(f"Pending Review ({summary['total']})")
+        st.caption("Select the next item to review.")
+        st.metric("High-risk", summary["high_risk"])
+        st.metric("Unreadable", summary["unreadable"])
+
+        if not pending:
+            st.info("Queue is empty. Nothing awaiting review.")
+            st.stop()
+
+        query = st.text_input("Search queue", key="queue_search")
+        filtered_pending = [
+            meta for meta in pending
+            if not query or query.lower() in (
+                meta.get("file_name", meta.get("_json_name", "")) + " " + get_status_label(meta.get("status", "UNKNOWN"))
+            ).lower()
+        ]
+
+        if not filtered_pending:
+            st.info("No items match the current filter.")
+            st.stop()
+
+        for meta in filtered_pending:
+            status = meta.get("status", "UNKNOWN")
+            badge = get_status_badge(status)
+            file_name = meta.get("file_name", meta.get("_json_name", "unknown"))
+            label = f"{badge} {file_name}"
+            if st.button(label, key=f"select_{meta['_json_name']}", use_container_width=True):
+                st.session_state.selected_json = meta["_json_name"]
+
+    selected_meta = next(
+        (m for m in pending if m["_json_name"] == st.session_state.selected_json), None
+    )
+
     if not pending:
-        st.info("Queue is empty. Nothing awaiting review.")
-    for meta in pending:
-        status = meta.get("status", "UNKNOWN")
-        badge = "🔴" if status == "UNREADABLE_IMAGE_PDF" else "🟠"
-        label = f"{badge} {meta.get('file_name', meta['_json_name'])}"
-        if st.button(label, key=f"select_{meta['_json_name']}", use_container_width=True):
-            st.session_state.selected_json = meta["_json_name"]
+        st.stop()
 
-selected_meta = next(
-    (m for m in pending if m["_json_name"] == st.session_state.selected_json), None
-)
+    if selected_meta is None:
+        st.info("Select a document from the sidebar to begin review.")
+        st.stop()
 
-if not pending:
-    st.stop()
+    # -----------------------------------------------------------------------
+    # Detail panel for the selected item
+    # -----------------------------------------------------------------------
+    meta = selected_meta
+    file_name = meta.get("file_name", "unknown")
+    status = meta.get("status", "UNKNOWN")
 
-if selected_meta is None:
-    st.info("Select a document from the sidebar to begin review.")
-    st.stop()
+    top_left, top_right = st.columns([2, 1])
+    with top_left:
+        st.subheader(file_name)
+        st.caption(
+            f"Status: **{get_status_label(status)}**  •  Ingested: {meta.get('ingested_at', 'n/a')}"
+        )
+    with top_right:
+        st.metric("File hash", (meta.get("file_hash") or "")[:12] + "…")
+        st.metric("Risk score", get_risk_score(meta) if get_risk_score(meta) is not None else "n/a")
 
-# ---------------------------------------------------------------------------
-# Detail panel for the selected item
-# ---------------------------------------------------------------------------
-meta = selected_meta
-file_name = meta.get("file_name", "unknown")
-status = meta.get("status", "UNKNOWN")
-
-col_a, col_b, col_c = st.columns([2, 1, 1])
-with col_a:
-    st.subheader(file_name)
-    st.caption(f"Status: **{status}**  •  Ingested: {meta.get('ingested_at', 'n/a')}")
-with col_b:
-    st.metric("File hash", (meta.get("file_hash") or "")[:12] + "…")
-with col_c:
     if not meta.get("_pdf_exists"):
-        st.error("Original file missing from queue")
+        st.warning("Original file missing from queue; review is limited to available metadata and sanitized output.")
 
-risk_metrics = meta.get("risk_metrics", {})
-if isinstance(risk_metrics, dict) and risk_metrics:
-    mcols = st.columns(min(len(risk_metrics), 6))
-    for i, (k, v) in enumerate(risk_metrics.items()):
-        mcols[i % len(mcols)].metric(k, v)
+    risk_metrics = meta.get("risk_metrics", {})
+    if isinstance(risk_metrics, dict) and risk_metrics:
+        mcols = st.columns(min(len(risk_metrics), 6))
+        for i, (k, v) in enumerate(risk_metrics.items()):
+            mcols[i % len(mcols)].metric(k, v)
 
-st.divider()
+    st.divider()
 
-is_unreadable = status == "UNREADABLE_IMAGE_PDF"
-sanitized_text, san_path = load_sanitized_text(file_name)
+    is_unreadable = status == "UNREADABLE_IMAGE_PDF"
+    sanitized_text, _ = load_sanitized_text(file_name)
 
-if meta.get("_pdf_exists"):
-    original_text = load_original_text(meta["_pdf_path"])
-else:
-    original_text = ""
-
-if is_unreadable or sanitized_text is None:
-    st.warning(
-        "No sanitized text exists for this document (extraction/OCR returned "
-        "nothing). You can transcribe or paste the readable text below, and "
-        "Approve will run it through the standard masking rules before saving."
-    )
-    manual_text = st.text_area(
-        "Manual transcription (optional)", value="", height=220,
-        placeholder="Paste or type the document text here to enable masking + approval…",
-    )
-    if manual_text.strip():
-        preview_sanitized, preview_metrics = pl.mask_sensitive_data(manual_text)
-        st.markdown("**Preview: before → after masking**")
-        st.markdown(render_word_diff_html(manual_text, preview_sanitized), unsafe_allow_html=True)
+    if meta.get("_pdf_exists"):
+        original_text = load_original_text(meta["_pdf_path"])
     else:
-        preview_sanitized = None
-else:
-    st.markdown("**Before → After masking (diff view)**")
-    st.markdown(render_word_diff_html(original_text, sanitized_text), unsafe_allow_html=True)
+        original_text = ""
 
-    with st.expander("View full original text"):
-        st.text_area("Original", original_text, height=250, disabled=True, label_visibility="collapsed")
-    with st.expander("View full sanitized text"):
-        st.text_area("Sanitized", sanitized_text, height=250, disabled=True, label_visibility="collapsed")
-    preview_sanitized = None
-
-st.divider()
-
-approve_col, reject_col = st.columns(2)
-
-with approve_col:
-    st.markdown("### ✅ Approve")
-    st.caption("Archives the source and finalizes the sanitized output.")
-    disabled = is_unreadable and not (locals().get("manual_text") or "").strip()
-    if st.button("Approve & Archive", type="primary", disabled=disabled, use_container_width=True):
-        if is_unreadable:
-            approve_item(meta, edited_sanitized_text=manual_text)
+    if is_unreadable or sanitized_text is None:
+        st.warning(
+            "No sanitized text exists for this document. You can paste the readable text below and approve it to run through the standard masking rules."
+        )
+        manual_text = st.text_area(
+            "Manual transcription (optional)", value="", height=220,
+            placeholder="Paste or type the document text here to enable masking + approval…",
+        )
+        if manual_text.strip():
+            preview_sanitized, _ = pl.mask_sensitive_data(manual_text)
+            st.markdown("**Preview: before → after masking**")
+            st.markdown(render_word_diff_html(manual_text, preview_sanitized), unsafe_allow_html=True)
         else:
-            approve_item(meta)
-        st.session_state.selected_json = None
-        st.success(f"Approved {file_name}.")
-        st.rerun()
+            preview_sanitized = None
+    else:
+        st.markdown("**Before → After masking (diff view)**")
+        st.markdown(render_word_diff_html(original_text, sanitized_text), unsafe_allow_html=True)
 
-with reject_col:
-    st.markdown("### ❌ Reject")
-    st.caption("Quarantines the sanitized output and archives the source as rejected.")
-    reason = st.text_input("Rejection reason (optional)", key=f"reason_{meta['_json_name']}")
-    if st.button("Reject", use_container_width=True):
-        reject_item(meta, reason=reason)
-        st.session_state.selected_json = None
-        st.warning(f"Rejected {file_name}.")
-        st.rerun()
+        with st.expander("View full original text"):
+            st.text_area("Original", original_text, height=250, disabled=True, label_visibility="collapsed")
+        with st.expander("View full sanitized text"):
+            st.text_area("Sanitized", sanitized_text, height=250, disabled=True, label_visibility="collapsed")
+        preview_sanitized = None
+
+    st.divider()
+
+    approve_col, reject_col = st.columns(2)
+
+    with approve_col:
+        st.markdown("### ✅ Approve")
+        st.caption("Archives the source and finalizes the sanitized output.")
+        disabled = is_unreadable and not (locals().get("manual_text") or "").strip()
+        if st.button("Approve & Archive", type="primary", disabled=disabled, use_container_width=True):
+            if is_unreadable:
+                approve_item(meta, edited_sanitized_text=manual_text)
+            else:
+                approve_item(meta)
+            st.session_state.selected_json = None
+            st.success(f"Approved {file_name}.")
+            st.rerun()
+
+    with reject_col:
+        st.markdown("### ❌ Reject")
+        st.caption("Quarantines the sanitized output and archives the source as rejected.")
+        reason = st.text_input("Rejection reason (optional)", key=f"reason_{meta['_json_name']}")
+        if st.button("Reject", use_container_width=True):
+            reject_item(meta, reason=reason)
+            st.session_state.selected_json = None
+            st.warning(f"Rejected {file_name}.")
+            st.rerun()
+
+
+if __name__ == "__main__":
+    main()
