@@ -249,29 +249,59 @@ def extract_text_via_ocr(pdf_path):
         print(f"[ERROR] OCR fallback extraction failed. Context: {e}")
         return None
 
-def run_ingestion_pipeline():
+def discover_pdf_files(source_dir, recursive=False):
+    """Return a deterministic list of PDF files discovered under a source directory."""
+    if not source_dir or not os.path.isdir(source_dir):
+        return []
+
+    if recursive:
+        matches = []
+        for root, _, files in os.walk(source_dir):
+            for fname in sorted(files):
+                if fname.lower().endswith(".pdf"):
+                    matches.append(os.path.join(root, fname))
+        return sorted(matches)
+
+    return sorted(
+        os.path.join(source_dir, fname)
+        for fname in os.listdir(source_dir)
+        if fname.lower().endswith(".pdf")
+    )
+
+
+def run_ingestion_pipeline(source_dir=None, selected_files=None):
     """Orchestrates Ingestion, Multi-Pattern Redaction, and Human-in-the-Loop Routing."""
     print("=" * 60)
     print("STARTING RUN: Multi-Layer Governance & Human-in-the-Loop Triage")
     print("=" * 60)
-    
-    if not os.path.exists(SOURCE_DIR):
-        print(f"[ERROR] Source directory '{SOURCE_DIR}' does not exist.")
-        return
-        
-    incoming_files = [f for f in os.listdir(SOURCE_DIR) if f.endswith('.pdf')]
-    
+
+    active_source_dir = source_dir or SOURCE_DIR
+    if not os.path.exists(active_source_dir):
+        print(f"[ERROR] Source directory '{active_source_dir}' does not exist.")
+        return {"processed_count": 0, "routed_to_review": 0}
+
+    incoming_files = []
+    if selected_files:
+        for name in selected_files:
+            file_path = os.path.join(active_source_dir, name)
+            if os.path.isfile(file_path):
+                incoming_files.append(file_path)
+    else:
+        incoming_files = discover_pdf_files(active_source_dir)
+
     if not incoming_files:
-        print(f"[STATUS] Ingestion pool empty. Place a sample PDF in '{SOURCE_DIR}/' to test.")
-        return
+        print(f"[STATUS] Ingestion pool empty. Place a sample PDF in '{active_source_dir}/' to test.")
+        return {"processed_count": 0, "routed_to_review": 0}
 
     print(f"[INFO] Discovered {len(incoming_files)} pending file(s) for ingestion.\n")
 
     manifest = load_manifest()
     manifest_updated = False
+    processed_count = 0
+    routed_to_review = 0
 
-    for file_name in incoming_files:
-        file_path = os.path.join(SOURCE_DIR, file_name)
+    for file_path in incoming_files:
+        file_name = os.path.basename(file_path)
         print(f"--> Processing File: {file_name}")
         
         # Calculate file hash for ingestion state tracking
@@ -335,6 +365,8 @@ def run_ingestion_pipeline():
                 "routed_to_review": True
             }
             manifest_updated = True
+            processed_count += 1
+            routed_to_review += 1
             
             # Housekeeping: Move processed file to archive directory to keep source clean
             try:
@@ -377,6 +409,10 @@ def run_ingestion_pipeline():
         else:
             print(f"    [PASS] Low-risk file. Cleaned stream routing to standard output.")
             
+        processed_count += 1
+        if is_high_risk:
+            routed_to_review += 1
+
         # 4. Storage Phase
         output_file_name = file_name.replace(".pdf", "_sanitized.txt")
         output_path = os.path.join(SANITIZED_DIR, output_file_name)
@@ -410,6 +446,7 @@ def run_ingestion_pipeline():
     print("\n" + "=" * 60)
     print("RUN COMPLETE: Pipeline idling.")
     print("=" * 60)
+    return {"processed_count": processed_count, "routed_to_review": routed_to_review}
 
 if __name__ == "__main__":
     run_ingestion_pipeline()

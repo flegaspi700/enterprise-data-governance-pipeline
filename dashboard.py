@@ -153,6 +153,11 @@ def build_queue_summary(pending):
     }
 
 
+def discover_available_files(source_dir=None):
+    source_dir = source_dir or pl.SOURCE_DIR
+    return [os.path.basename(path) for path in pl.discover_pdf_files(source_dir)]
+
+
 def update_manifest_decision(file_hash, decision, reason=""):
     if not file_hash:
         return
@@ -328,6 +333,28 @@ def main():
         st.caption("Select the next item to review.")
         st.metric("High-risk", summary["high_risk"])
         st.metric("Unreadable", summary["unreadable"])
+
+        st.subheader("Batch intake")
+        source_dir = st.text_input("Source folder", value=pl.SOURCE_DIR, key="source_dir")
+        if st.button("Discover PDFs", use_container_width=True):
+            st.session_state.discovered_files = discover_available_files(source_dir)
+            st.success(f"Found {len(st.session_state.discovered_files)} PDF(s).")
+
+        if "discovered_files" not in st.session_state:
+            st.session_state.discovered_files = discover_available_files(source_dir)
+
+        if st.session_state.discovered_files:
+            selected_files = st.multiselect(
+                "Select files to process",
+                st.session_state.discovered_files,
+                default=st.session_state.discovered_files[:1],
+                key="selected_files",
+            )
+            if st.button("Process selected", use_container_width=True):
+                result = pl.run_ingestion_pipeline(source_dir=source_dir, selected_files=selected_files)
+                st.success(f"Processed {result['processed_count']} file(s); {result['routed_to_review']} routed for review.")
+                st.session_state.discovered_files = discover_available_files(source_dir)
+                st.rerun()
 
         if not pending:
             st.info("Queue is empty. Nothing awaiting review.")
