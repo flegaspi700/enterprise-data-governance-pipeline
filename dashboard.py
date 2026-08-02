@@ -153,9 +153,70 @@ def build_queue_summary(pending):
     }
 
 
-def discover_available_files(source_dir=None):
+def filter_pending_reviews(pending, query="", status_filter="All", risk_filter="All", date_filter="All"):
+    """Filter pending review items by text, status, risk, and age."""
+    filtered = list(pending)
+    query = (query or "").strip().lower()
+
+    if query:
+        filtered = [
+            meta for meta in filtered
+            if query in (
+                meta.get("file_name", meta.get("_json_name", "")) + " " + get_status_label(meta.get("status", "UNKNOWN"))
+            ).lower()
+        ]
+
+    if status_filter and status_filter != "All":
+        filtered = [meta for meta in filtered if meta.get("status") == status_filter]
+
+    if risk_filter and risk_filter != "All":
+        if risk_filter == "High risk":
+            filtered = [meta for meta in filtered if (get_risk_score(meta) or 0) >= pl.HIGH_RISK_THRESHOLD]
+        elif risk_filter == "Low risk":
+            filtered = [meta for meta in filtered if (get_risk_score(meta) or 0) < pl.HIGH_RISK_THRESHOLD]
+
+    if date_filter and date_filter != "All":
+        now = datetime.datetime.now()
+        cutoff = None
+        if date_filter == "Last 24 hours":
+            cutoff = now - datetime.timedelta(hours=24)
+        elif date_filter == "Last 7 days":
+            cutoff = now - datetime.timedelta(days=7)
+        elif date_filter == "Last 30 days":
+            cutoff = now - datetime.timedelta(days=30)
+        if cutoff is not None:
+            filtered = [
+                meta for meta in filtered
+                if _parse_review_timestamp(meta.get("ingested_at")) and _parse_review_timestamp(meta.get("ingested_at")) >= cutoff
+            ]
+
+    return filtered
+
+
+def _parse_review_timestamp(value):
+    if not value:
+        return None
+    try:
+        return datetime.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def bulk_decide_items(items, action, reason=""):
+    """Approve or reject a collection of review items in one go."""
+    for meta in items:
+        if action == "APPROVE":
+            approve_item(meta)
+        elif action == "REJECT":
+            reject_item(meta, reason=reason)
+
+
+def discover_available_files(source_dir=None, recursive=False):
     source_dir = source_dir or pl.SOURCE_DIR
-    return [os.path.basename(path) for path in pl.discover_pdf_files(source_dir)]
+    discovered = pl.discover_pdf_files(source_dir, recursive=recursive)
+    if recursive:
+        return [os.path.relpath(path, source_dir).replace(os.sep, "/") for path in discovered]
+    return [os.path.basename(path) for path in discovered]
 
 
 def update_manifest_decision(file_hash, decision, reason=""):
@@ -336,12 +397,13 @@ def main():
 
         st.subheader("Batch intake")
         source_dir = st.text_input("Source folder", value=pl.SOURCE_DIR, key="source_dir")
+        recursive_scan = st.checkbox("Include subfolders", value=False, key="recursive_scan")
         if st.button("Discover PDFs", use_container_width=True):
-            st.session_state.discovered_files = discover_available_files(source_dir)
+            st.session_state.discovered_files = discover_available_files(source_dir, recursive=recursive_scan)
             st.success(f"Found {len(st.session_state.discovered_files)} PDF(s).")
 
         if "discovered_files" not in st.session_state:
-            st.session_state.discovered_files = discover_available_files(source_dir)
+            st.session_state.discovered_files = discover_available_files(source_dir, recursive=recursive_scan)
 
         if st.session_state.discovered_files:
             selected_files = st.multiselect(
@@ -350,23 +412,57 @@ def main():
                 default=st.session_state.discovered_files[:1],
                 key="selected_files",
             )
-            if st.button("Process selected", use_container_width=True):
-                result = pl.run_ingestion_pipeline(source_dir=source_dir, selected_files=selected_files)
-                st.success(f"Processed {result['processed_count']} file(s); {result['routed_to_review']} routed for review.")
-                st.session_state.discovered_files = discover_available_files(source_dir)
-                st.rerun()
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("Process selected", use_container_width=True):
+                    result = pl.run_ingestion_pipeline(source_dir=source_dir, selected_files=selected_files)
+                    st.success(f"Processed {result['processed_count']} file(s); {result['routed_to_review']} routed for review.")
+                    st.session_state.discovered_files = discover_available_files(source_dir, recursive=recursive_scan)
+                    st.rerun()
+            with col_b:
+                if st.button("Process all", use_container_width=True):
+                    result = pl.run_ingestion_pipeline(source_dir=source_dir, selected_files=st.session_state.discovered_files)
+                    st.success(f"Processed {result['processed_count']} file(s); {result['routed_to_review']} routed for review.")
+                    st.session_state.discovered_files = discover_available_files(source_dir, recursive=recursive_scan)
+                    st.rerun()
 
         if not pending:
             st.info("Queue is empty. Nothing awaiting review.")
             st.stop()
 
         query = st.text_input("Search queue", key="queue_search")
-        filtered_pending = [
-            meta for meta in pending
-            if not query or query.lower() in (
-                meta.get("file_name", meta.get("_json_name", "")) + " " + get_status_label(meta.get("status", "UNKNOWN"))
-            ).lower()
-        ]
+        status_filter = st.selectbox(
+            "Status",
+            ["All", "FLAGGED_FOR_REVIEW", "UNREADABLE_IMAGE_PDF", "APPROVED", "REJECTED"],
+            key="status_filter",
+        )
+        risk_filter = st.selectbox("Risk", ["All", "High risk", "Low risk"], key="risk_filter")
+        date_filter = st.selectbox("Date", ["All", "Last 24 hours", "Last 7 days", "Last 30 days"], key="date_filter")
+        filtered_pending = filter_pending_reviews(
+            pending,
+            query=query,
+            status_filter=status_filter,
+            risk_filter=risk_filter,
+            date_filter=date_filter,
+        )
+
+        if filtered_pending:
+            selected_queue_items = st.multiselect(
+                "Select items for bulk action",
+                [meta.get("file_name", meta.get("_json_name", "unknown")) for meta in filtered_pending],
+                default=[],
+                key="bulk_queue_selection",
+            )
+            bulk_action = st.selectbox("Bulk action", ["APPROVE", "REJECT"], key="bulk_action")
+            bulk_reason = st.text_input("Bulk reason", key="bulk_reason")
+            if st.button("Apply bulk action", use_container_width=True):
+                selected_metas = [meta for meta in filtered_pending if meta.get("file_name", meta.get("_json_name", "unknown")) in selected_queue_items]
+                if selected_metas:
+                    bulk_decide_items(selected_metas, bulk_action, reason=bulk_reason)
+                    st.success(f"Applied {bulk_action.lower()} to {len(selected_metas)} item(s).")
+                    st.rerun()
+                else:
+                    st.info("Select at least one item from the queue.")
 
         if not filtered_pending:
             st.info("No items match the current filter.")

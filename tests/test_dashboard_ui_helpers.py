@@ -1,6 +1,8 @@
 import importlib.util
+import datetime
 from pathlib import Path
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -28,6 +30,70 @@ class DashboardUIHelpersTests(unittest.TestCase):
         self.assertEqual(summary["total"], 3)
         self.assertEqual(summary["high_risk"], 3)
         self.assertEqual(summary["unreadable"], 1)
+
+    def test_discover_available_files_supports_recursive_paths(self):
+        with mock.patch.object(dashboard.pl, "discover_pdf_files", return_value=[
+            "/tmp/source/nested/alpha.pdf",
+            "/tmp/source/beta.pdf",
+        ]):
+            discovered = dashboard.discover_available_files("/tmp/source", recursive=True)
+
+        self.assertEqual(discovered, ["nested/alpha.pdf", "beta.pdf"])
+
+    def test_filter_pending_reviews_applies_query_status_risk_and_date_filters(self):
+        now = datetime.datetime.now()
+        pending = [
+            {
+                "file_name": "alpha.pdf",
+                "status": "FLAGGED_FOR_REVIEW",
+                "ingested_at": now.isoformat(),
+                "risk_metrics": {"PII hits": 3},
+            },
+            {
+                "file_name": "beta.pdf",
+                "status": "UNREADABLE_IMAGE_PDF",
+                "ingested_at": (now - datetime.timedelta(days=10)).isoformat(),
+                "risk_metrics": {"PII hits": 1},
+            },
+            {
+                "file_name": "gamma.pdf",
+                "status": "FLAGGED_FOR_REVIEW",
+                "ingested_at": (now - datetime.timedelta(days=2)).isoformat(),
+                "risk_metrics": {"PII hits": 8},
+            },
+        ]
+
+        filtered = dashboard.filter_pending_reviews(
+            pending,
+            query="alpha",
+            status_filter="FLAGGED_FOR_REVIEW",
+            risk_filter="High risk",
+            date_filter="Last 7 days",
+        )
+
+        self.assertEqual([item["file_name"] for item in filtered], ["alpha.pdf"])
+
+    def test_bulk_decide_items_dispatches_to_bulk_handlers(self):
+        calls = []
+
+        def fake_approve(meta):
+            calls.append(("approve", meta["file_name"]))
+
+        def fake_reject(meta, reason=""):
+            calls.append(("reject", meta["file_name"], reason))
+
+        with mock.patch.object(dashboard, "approve_item", side_effect=fake_approve), \
+             mock.patch.object(dashboard, "reject_item", side_effect=fake_reject):
+            dashboard.bulk_decide_items(
+                [{"file_name": "alpha.pdf"}, {"file_name": "beta.pdf"}],
+                "REJECT",
+                reason="needs review",
+            )
+
+        self.assertEqual(calls, [
+            ("reject", "alpha.pdf", "needs review"),
+            ("reject", "beta.pdf", "needs review"),
+        ])
 
 
 if __name__ == "__main__":

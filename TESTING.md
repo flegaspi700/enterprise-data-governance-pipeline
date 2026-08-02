@@ -74,15 +74,37 @@ This tests the new folder-based batch processing flow from the Streamlit dashboa
    Enter a folder such as `source_documents` or another folder containing one or more `.pdf` files.
 4. **Discover Files**:
    Click **Discover PDFs**. The app should list the PDFs it found in the selected folder.
-5. **Select Files and Process**:
+5. **Test Selected Processing**:
    Use the multiselect control to choose one or more PDFs and click **Process selected**.
 6. **Verify Outcomes**:
    * The pipeline should process each selected file and print progress in the terminal.
    * Each processed file should be moved to `archived_sources/` after processing.
    * Sanitized output should be written to `sanitized_output/`.
    * If a file is flagged as high risk, a review metadata file should be created in `human_review_queue/`.
-7. **Review the Queue**:
+7. **Test Recursive Discovery**:
+   Enable **Include subfolders**, click **Discover PDFs** again, and confirm nested PDFs appear with their relative paths (for example `subfolder/example.pdf`).
+8. **Test Process All**:
+   After discovery, click **Process all**. The app should process every discovered file without requiring manual selection.
+9. **Review the Queue**:
    After processing, refresh the dashboard and confirm the newly created review items appear in the pending review list.
+
+### Scenario 0b: Queue Filters and Bulk Review Actions
+This validates the new review workflow controls for handling larger queues.
+
+1. **Open the Sidebar Queue Controls**:
+   In the dashboard sidebar, scroll to the queue controls beneath the pending review list.
+2. **Filter by Status**:
+   Choose a status such as `FLAGGED_FOR_REVIEW` or `UNREADABLE_IMAGE_PDF` and verify the queue list changes to only those items.
+3. **Filter by Risk**:
+   Switch the risk filter to `High risk` or `Low risk` and confirm the visible items change accordingly.
+4. **Filter by Date**:
+   Choose `Last 7 days` or `Last 30 days` and verify the queue updates based on the ingestion timestamp.
+5. **Apply a Bulk Action**:
+   Select one or more queue items in the multiselect and choose `REJECT` or `APPROVE` from the bulk action dropdown.
+6. **Verify Outcomes**:
+   * The selected items should be moved into the approved or rejected review folders.
+   * The queue should refresh and remove the processed items from the pending list.
+   * A review decision log entry should be appended for each action.
 
 ---
 
