@@ -153,6 +153,37 @@ def build_queue_summary(pending):
     }
 
 
+def build_dashboard_summary(pending, review_dir=None, archive_dir=None, sanitized_dir=None):
+    review_dir = review_dir or pl.REVIEW_DIR
+    archive_dir = archive_dir or pl.ARCHIVE_DIR
+    sanitized_dir = sanitized_dir or pl.SANITIZED_DIR
+
+    reviewed = 0
+    review_log_path = os.path.join(review_dir, "review_decisions.json")
+    if os.path.exists(review_log_path):
+        try:
+            with open(review_log_path, "r", encoding="utf-8") as handle:
+                decisions = json.load(handle)
+            reviewed = len(decisions) if isinstance(decisions, list) else 0
+        except Exception:
+            reviewed = 0
+
+    archived = 0
+    if os.path.isdir(archive_dir):
+        archived = len([name for name in os.listdir(archive_dir) if name.lower().endswith(".pdf")])
+
+    sanitized = 0
+    if os.path.isdir(sanitized_dir):
+        sanitized = len([name for name in os.listdir(sanitized_dir) if name.endswith("_sanitized.txt")])
+
+    return {
+        "pending": len(pending),
+        "reviewed": reviewed,
+        "archived": archived,
+        "sanitized": sanitized,
+    }
+
+
 def filter_pending_reviews(pending, query="", status_filter="All", risk_filter="All", date_filter="All"):
     """Filter pending review items by text, status, risk, and age."""
     filtered = list(pending)
@@ -388,6 +419,7 @@ def main():
 
     pending = list_pending_reviews()
     summary = build_queue_summary(pending)
+    operational_summary = build_dashboard_summary(pending)
 
     with st.sidebar:
         st.header(f"Pending Review ({summary['total']})")
@@ -493,6 +525,19 @@ def main():
     meta = selected_meta
     file_name = meta.get("file_name", "unknown")
     status = meta.get("status", "UNKNOWN")
+
+    st.subheader("Operational summary")
+    summary_cols = st.columns(4)
+    with summary_cols[0]:
+        st.metric("Pending", operational_summary["pending"])
+    with summary_cols[1]:
+        st.metric("Reviewed", operational_summary["reviewed"])
+    with summary_cols[2]:
+        st.metric("Archived", operational_summary["archived"])
+    with summary_cols[3]:
+        st.metric("Sanitized", operational_summary["sanitized"])
+
+    st.divider()
 
     top_left, top_right = st.columns([2, 1])
     with top_left:

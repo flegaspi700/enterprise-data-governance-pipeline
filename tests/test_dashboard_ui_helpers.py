@@ -1,5 +1,7 @@
 import importlib.util
 import datetime
+import json
+import tempfile
 from pathlib import Path
 import unittest
 from unittest import mock
@@ -94,6 +96,31 @@ class DashboardUIHelpersTests(unittest.TestCase):
             ("reject", "alpha.pdf", "needs review"),
             ("reject", "beta.pdf", "needs review"),
         ])
+
+    def test_build_dashboard_summary_counts_pending_reviewed_archived_and_sanitized(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            review_dir = base / "review"
+            archive_dir = base / "archive"
+            sanitized_dir = base / "sanitized"
+            review_dir.mkdir()
+            archive_dir.mkdir()
+            sanitized_dir.mkdir()
+            (review_dir / "review_decisions.json").write_text(json.dumps([{"decision": "APPROVED"}]), encoding="utf-8")
+            (archive_dir / "one.pdf").write_text("archived", encoding="utf-8")
+            (sanitized_dir / "two_sanitized.txt").write_text("sanitized", encoding="utf-8")
+
+            summary = dashboard.build_dashboard_summary(
+                [{"file_name": "pending.pdf"}],
+                review_dir=str(review_dir),
+                archive_dir=str(archive_dir),
+                sanitized_dir=str(sanitized_dir),
+            )
+
+        self.assertEqual(summary["pending"], 1)
+        self.assertEqual(summary["reviewed"], 1)
+        self.assertEqual(summary["archived"], 1)
+        self.assertEqual(summary["sanitized"], 1)
 
 
 if __name__ == "__main__":
