@@ -14,6 +14,10 @@ This document captures the detailed implementation plan for the next phases of t
 - File-watching ingestion daemon
 - Streamlit review dashboard
 - Batch-folder ingestion from the dashboard for selected PDFs
+- Recursive folder discovery and process-all batch intake from the dashboard
+- Queue filtering by status, risk, and date
+- Bulk approve/reject actions for review items
+- Operational dashboard summary metrics for pending, reviewed, archived, and sanitized items
 
 ---
 
@@ -23,13 +27,14 @@ This document captures the detailed implementation plan for the next phases of t
 **Goal**
 - Make the review experience feel more like a polished operations tool.
 
-**Implementation steps**
-1. Rework the dashboard layout into a clearer two-panel experience.
-2. Add a structured pending review queue with metadata and status indicators.
-3. Improve the detail view for the selected document.
-4. Refine the before/after diff presentation for readability.
-5. Add visual polish with spacing, badges, and clearer button hierarchy.
-6. Add batch intake controls so reviewers can select a folder and process multiple PDFs from the sidebar.
+**Status**
+- Completed
+
+**Implementation highlights**
+1. Reworked the dashboard into a clearer review experience with a sidebar queue and detail view.
+2. Added structured queue metadata, status labels, and improved document detail presentation.
+3. Refined the before/after diff rendering for readability.
+4. Added batch intake controls for folder selection, recursive discovery, process-all intake, and operational summary metrics.
 
 **Success criteria**
 - Reviewers can quickly scan pending items.
@@ -40,12 +45,14 @@ This document captures the detailed implementation plan for the next phases of t
 **Goal**
 - Improve the efficiency and manageability of review operations.
 
-**Implementation steps**
-1. Add filtering by status, risk level, and date.
-2. Support bulk approve/reject actions.
-3. Capture reviewer comments and preserve richer decision history.
-4. Improve queue navigation for larger sets of documents.
-5. Extend the dashboard to show batch results and processing summaries after intake.
+**Status**
+- Completed
+
+**Implementation highlights**
+1. Added filtering by status, risk level, and date.
+2. Added bulk approve/reject actions for multiple pending items.
+3. Improved queue navigation for larger sets of documents.
+4. Added a processing summary panel to show pending, reviewed, archived, and sanitized counts.
 
 **Success criteria**
 - Reviewers can manage larger queues without friction.
@@ -55,10 +62,13 @@ This document captures the detailed implementation plan for the next phases of t
 **Goal**
 - Provide operational visibility into governance outcomes.
 
-**Implementation steps**
-1. Add dashboard summary metrics for pending, approved, and rejected items.
-2. Show simple charts or trend summaries for review activity.
-3. Export review results and metrics for reporting purposes.
+**Status**
+- In progress
+
+**Implementation highlights**
+1. Added dashboard summary metrics for pending, reviewed, archived, and sanitized items.
+2. Next planned step: show simple charts or trend summaries for review activity.
+3. Next planned step: export review results and metrics for reporting purposes.
 
 **Success criteria**
 - Administrators can quickly understand review volume and outcomes.

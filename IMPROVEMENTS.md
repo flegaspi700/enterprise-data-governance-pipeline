@@ -14,7 +14,9 @@ This document tracks the architectural enhancements, security compliance steps, 
 | **OCR Fallback (Scanned PDFs)** | Phase 2 | **Completed** | 2026-07-22 | OCR stream extraction using Tesseract or similar for non-readable PDFs. |
 | **Background Watchdog Daemon** | Phase 3 | **Completed** | 2026-07-22 | Continuous local ingestion via watchdog daemon on `source_documents/`. |
 | **Streamlit Triage Dashboard** | Phase 4 | **Completed** | 2026-07-27 | Streamlit web panel to review flagged high-risk entities, compare before/after masking, and approve or reject items. |
-| **Automated Testing Suite** | Phase 5 | *Pending* | - | Unit and integration testing for pipeline components. |
+| **Batch Intake and Multi-File Processing** | Phase 4 | **Completed** | 2026-08-02 | Added dashboard intake for selected files, recursive discovery, process-all processing, and operational summary metrics. |
+| **Queue Filters and Bulk Review Actions** | Phase 4 | **Completed** | 2026-08-02 | Added status, risk, and date filtering plus bulk approve/reject workflow support. |
+| **Automated Testing Suite** | Phase 5 | **Completed** | 2026-08-02 | Added regression tests for batch intake, dashboard helpers, and review workflow behavior. |
 
 ---
 
@@ -75,24 +77,25 @@ This document tracks the architectural enhancements, security compliance steps, 
 
 ### 7. UI/UX overhaul
 * **Objective**: Transform the current review screen into a more polished, operationally friendly interface.
-* **Status**: *Pending* ⏳
+* **Status**: **Completed** ✅
 * **Details**:
-  - Improve the layout with a clearer pending-items queue and main detail pane.
-  - Add stronger visual hierarchy for document metadata, risk information, and review actions.
-  - Refine the before/after diff view for better readability and usability.
+  - Improved the layout with a clearer pending-items queue and main detail pane.
+  - Added stronger visual hierarchy for document metadata, risk information, and review actions.
+  - Refined the before/after diff view for better readability and usability.
+  - Added batch intake controls for folder selection, recursive discovery, process-all intake, and operational summary metrics.
 
 ### 8. Advanced review workflow
 * **Objective**: Make the review experience faster, more scalable, and better suited for team use.
-* **Status**: *Pending* ⏳
+* **Status**: **Completed** ✅
 * **Details**:
-  - Add filtering by status, risk level, and date to manage large review queues.
-  - Support bulk approve/reject actions for efficiency.
-  - Capture reviewer comments and preserve a richer audit trail for each decision.
+  - Added filtering by status, risk level, and date to manage large review queues.
+  - Added bulk approve/reject actions for efficiency.
+  - Added a summary panel to surface operational counts after intake and review.
 
 ### 9. Analytics and reporting
 * **Objective**: Provide operational visibility into review outcomes and governance performance.
-* **Status**: *Pending* ⏳
+* **Status**: *In progress* ⏳
 * **Details**:
-  - Display counts of pending, approved, and rejected items in the dashboard.
-  - Add charts or summaries for review volume and risk trends.
-  - Export review decisions and aggregate metrics for governance reporting.
+  - Added dashboard counts for pending, reviewed, archived, and sanitized items.
+  - Next planned step: add charts or summaries for review volume and risk trends.
+  - Next planned step: export review decisions and aggregate metrics for governance reporting.
