@@ -13,6 +13,7 @@ This document captures the detailed implementation plan for the next phases of t
 - OCR fallback for scanned PDFs
 - File-watching ingestion daemon
 - Streamlit review dashboard
+- Batch-folder ingestion from the dashboard for selected PDFs
 
 ---
 
@@ -28,6 +29,7 @@ This document captures the detailed implementation plan for the next phases of t
 3. Improve the detail view for the selected document.
 4. Refine the before/after diff presentation for readability.
 5. Add visual polish with spacing, badges, and clearer button hierarchy.
+6. Add batch intake controls so reviewers can select a folder and process multiple PDFs from the sidebar.
 
 **Success criteria**
 - Reviewers can quickly scan pending items.
@@ -43,6 +45,7 @@ This document captures the detailed implementation plan for the next phases of t
 2. Support bulk approve/reject actions.
 3. Capture reviewer comments and preserve richer decision history.
 4. Improve queue navigation for larger sets of documents.
+5. Extend the dashboard to show batch results and processing summaries after intake.
 
 **Success criteria**
 - Reviewers can manage larger queues without friction.

@@ -61,6 +61,31 @@ We have provided two helper scripts in the `tests/` directory to generate PDF fi
 
 ## 🏃 Test Scenarios
 
+### Scenario 0: Dashboard Batch Intake (Manual UI Flow)
+This tests the new folder-based batch processing flow from the Streamlit dashboard.
+
+1. **Start the Dashboard**:
+   ```bash
+   streamlit run dashboard.py
+   ```
+2. **Open the Sidebar**:
+   In the left sidebar, locate the "Batch intake" section.
+3. **Pick a Source Folder**:
+   Enter a folder such as `source_documents` or another folder containing one or more `.pdf` files.
+4. **Discover Files**:
+   Click **Discover PDFs**. The app should list the PDFs it found in the selected folder.
+5. **Select Files and Process**:
+   Use the multiselect control to choose one or more PDFs and click **Process selected**.
+6. **Verify Outcomes**:
+   * The pipeline should process each selected file and print progress in the terminal.
+   * Each processed file should be moved to `archived_sources/` after processing.
+   * Sanitized output should be written to `sanitized_output/`.
+   * If a file is flagged as high risk, a review metadata file should be created in `human_review_queue/`.
+7. **Review the Queue**:
+   After processing, refresh the dashboard and confirm the newly created review items appear in the pending review list.
+
+---
+
 ### Scenario 1: Low-Risk Document Ingestion
 This tests standard ingestion, redaction, and archiving for a low-risk document (total PII <= `high_risk_threshold`).
 
@@ -139,3 +164,16 @@ This tests the real-time background file ingestion.
    * Observe the watcher's terminal. It should immediately detect `realtime_test.pdf`, wait 1.5 seconds, and automatically run the ingestion pipeline.
    * Verify that the file is processed and archived instantly.
    * Terminate the watcher daemon in the terminal by pressing `Ctrl+C`.
+
+---
+
+## ✅ Manual Validation Checklist
+Use this checklist after running any of the scenarios above:
+
+- [ ] The dashboard loads successfully with Streamlit.
+- [ ] The sidebar shows the batch intake controls.
+- [ ] Discovering PDFs lists the expected files from the selected folder.
+- [ ] Selecting and processing files creates sanitized output.
+- [ ] High-risk files are routed to `human_review_queue/`.
+- [ ] Processed files are archived to `archived_sources/`.
+- [ ] The review queue reflects the newly created review records.
