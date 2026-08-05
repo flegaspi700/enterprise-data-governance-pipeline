@@ -11,6 +11,11 @@ Ensure all dependencies are installed:
 pip install -r requirements.txt
 ```
 
+Run the automated tests with:
+```bash
+python -m pytest -q
+```
+
 Verify that **Tesseract OCR** is installed and that the executable path matches your settings in `config.json`:
 - **Default Path**: `C:\Program Files\Tesseract-OCR\tesseract.exe`
 - You can verify your Tesseract installation by running:

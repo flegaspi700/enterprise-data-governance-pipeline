@@ -67,6 +67,19 @@ class PipelineBatchProcessingTests(unittest.TestCase):
             self.assertTrue((archive_dir / "alpha.pdf").exists())
             self.assertTrue((archive_dir / "beta.pdf").exists())
 
+    def test_mask_sensitive_data_redacts_configured_pii_rules(self):
+        text = "Email this to test.user@example.com and call 415-555-1234. SSN is 123-45-6789."
+        with mock.patch.object(pipeline, "load_spacy_engine", return_value=None):
+            sanitized, metrics = pipeline.mask_sensitive_data(text)
+
+        self.assertIn("[REDACTED_EMAIL]", sanitized)
+        self.assertIn("[REDACTED_PHONE]", sanitized)
+        self.assertIn("[REDACTED_TAX_ID]", sanitized)
+        self.assertEqual(metrics["emails"], 1)
+        self.assertEqual(metrics["phones"], 1)
+        self.assertEqual(metrics["ssns"], 1)
+        self.assertEqual(metrics["total"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()
